@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% block content %}
+{% set results = results|default({}) %}
+
+<h2 class="mb-4">Temporal Analysis</h2>
+<p>Upload a CSV, specify (or let me detect) the datetime column, and choose your output.</p>
+
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="mode" value="csv">
+
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">CSV File</label>
+      <input type="file" class="form-control" name="csv_file" accept=".csv,text/csv" required>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Datetime Column (optional)</label>
+      <input type="text" class="form-control" name="datetime_col" placeholder="Leave blank to auto-detect" value="{{ request.form.datetime_col or '' }}">
+      <div class="form-text">Supports standard strings and Unix epochs (seconds, milliseconds, microseconds, nanoseconds).</div>
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">Entity Column (optional)</label>
+      <input type="text" class="form-control" name="entity_col" placeholder="e.g., account_id, handle, channel" value="{{ request.form.entity_col or '' }}">
+      <div class="form-text">Enables near-simultaneity and jitter analyses across entities.</div>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Near-Simultaneity Window (seconds)</label>
+      <input type="number" class="form-control" name="co_window_seconds" value="{{ request.form.co_window_seconds or 10 }}" min="1" max="3600">
+      <div class="form-text">Windows with two or more entities within this window are flagged.</div>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Timezone</label>
+      <input type="text" class="form-control" name="timezone" placeholder="e.g., UTC, America/New_York" value="{{ request.form.timezone or '' }}">
+      <div class="form-text">If provided, timestamps are converted from UTC to this timezone for bucketing.</div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="form-check mt-4">
+        <input class="form-check-input" type="checkbox" name="dayfirst" id="dayfirst" {% if request.form.dayfirst %}checked{% endif %}>
+        <label class="form-check-label" for="dayfirst">Day-first dates (e.g., 31/05/2025)</label>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Output</label>
+      <div class="d-flex gap-3">
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="output_mode" id="table" value="table" {% if request.form.output_mode != 'excel' %}checked{% endif %}>
+          <label class="form-check-label" for="table">Table (on-page)</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="output_mode" id="excel" value="excel" {% if request.form.output_mode == 'excel' %}checked{% endif %}>
+          <label class="form-check-label" for="excel">Download Excel</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary mt-3">Analyze</button>
+</form>
+
+{% if results.error %}
+  <div class="alert alert-danger mt-4">{{ results.error }}</div>
+{% endif %}
+
+{% if results.ok %}
+  <h5 class="mt-4">Summary</h5>
+  <ul>
+    <li>Total Events: {{ results.summary.total }}</li>
+    <li>Datetime Column: "{{ results.datetime_col }}"</li>
+    <li>Timezone: {{ results.timezone }}</li>
+    <li>{% if results.entity_col %}Entity Column: "{{ results.entity_col }}"{% else %}Entity Column: —{% endif %}</li>
+    <li>Range: {{ results.summary.start }} → {{ results.summary.end }}</li>
+    <li>Top Minute Of Hour: {{ results.summary.top_minute if results.summary.top_minute is not none else '—' }} (share {{ "%.2f"|format(results.summary.top_minute_share * 100) if results.summary.top_minute_share is not none else '—' }}%)</li>
+    <li>Burst Ratio (Max ÷ Median, minute-level): {{ "%.2f"|format(results.summary.burst_ratio) if results.summary.burst_ratio is not none else '—' }}</li>
+  </ul>
+
+  <div class="row">
+    <div class="col-lg-4">
+      <h6>Top Minutes Of Hour</h6>
+      <table class="table table-sm table-striped">
+        <thead><tr><th>Minute</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for row in results.top_minutes %}
+          <tr><td>{{ row.minute }}</td><td>{{ row.count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="col-lg-4">
+      <h6>Top Hours Of Day</h6>
+      <table class="table table-sm table-striped">
+        <thead><tr><th>Hour</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for row in results.top_hours %}
+          <tr><td>{{ row.hour }}</td><td>{{ row.count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="col-lg-4">
+      <h6>Most Common Intervals (sec, rounded)</h6>
+      <table class="table table-sm table-striped">
+        <thead><tr><th>Interval</th><th>Count</th></tr></thead>
+        <tbody>
+          {% for row in results.top_intervals %}
+          <tr><td>{{ row.interval_seconds_rounded }}</td><td>{{ row.count }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if results.entity_col %}
+  <div class="mt-4">
+    <h5>Entity-Aware Indicators</h5>
+    <p class="mb-1">Near-Simultaneity Window: {{ results.co_window_seconds }} seconds.</p>
+    <div class="row">
+      <div class="col-lg-4">
+        <h6>Top Pairwise Co-Posts</h6>
+        <table class="table table-sm table-striped">
+          <thead><tr><th>Entity A</th><th>Entity B</th><th>Windows</th></tr></thead>
+          <tbody>
+            {% for row in results.copost_pair_preview %}
+            <tr><td>{{ row.entity_a }}</td><td>{{ row.entity_b }}</td><td>{{ row.copost_windows }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="col-lg-4">
+        <h6>Most Synchronous Entities</h6>
+        <table class="table table-sm table-striped">
+          <thead><tr><th>Entity</th><th>Events</th><th>Co-Post %</th></tr></thead>
+          <tbody>
+            {% for row in results.synchrony_preview %}
+            <tr><td>{{ row.entity }}</td><td>{{ row.events }}</td><td>{{ "%.1f"|format((row.copost_share or 0)*100) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="col-lg-4">
+        <h6>Jitter Flags (Uniform Gaps)</h6>
+        <table class="table table-sm table-striped">
+          <thead><tr><th>Entity</th><th>Modal Gap (s)</th><th>Modal %</th></tr></thead>
+          <tbody>
+            {% for row in results.jitter_preview %}
+            <tr><td>{{ row.entity }}</td><td>{{ row.modal_interval_s }}</td><td>{{ "%.1f"|format((row.modal_interval_share or 0)*100) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% endblock %}

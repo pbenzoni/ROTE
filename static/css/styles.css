@@ -1,0 +1,103 @@
+/* styles.css */
+body { font-family: "Inter", sans-serif; }
+.bg-primary { background-color: #002A4E !important; }
+.text-secondary { color: #009688 !important; }
+.btn-accent { background-color: #FF6B35; color: #fff; }
+.btn-accent:hover { background-color: #e65c2f; }
+
+/* Hero */
+.tool-hero {
+  background: radial-gradient(1200px 600px at 10% -10%, #0b4a7a 0%, #002A4E 60%, #001c34 100%);
+  border-radius: 1rem;
+}
+.tool-hero .hero-overlay {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+
+/* Tool cards */
+.tool-card {
+  position: relative;
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.tool-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(0,0,0,0.15);
+}
+.tool-card .card-body { padding: 1.25rem 1.25rem 1.25rem 1.25rem; }
+
+/* White soft overlay on top of background color */
+.tool-card-overlay {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,0.12);
+  mix-blend-mode: screen; /* brightens without washing out entirely */
+  pointer-events: none;
+}
+
+/* Big white icon “watermark” */
+.tool-icon {
+  position: absolute;
+  top: 14px; right: 16px;
+  font-size: 3rem;
+  color: #fff;
+  opacity: 0.25; /* watermark feel */
+  transform: translateZ(0);
+}
+
+/* Slightly muted white for body copy */
+.text-white-75 { color: rgba(255,255,255,0.85) !important; }
+
+/* Background theme gradients */
+.bg-tool-indigo {
+  background: linear-gradient(135deg, #3730a3 0%, #6366f1 100%); /* indigo → indigo-400 */
+}
+.bg-tool-teal {
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%); /* teal-700 → teal-400 */
+}
+.bg-tool-red {
+  background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%); /* red-700 → red-500 */
+}
+.bg-tool-amber {
+  background: linear-gradient(135deg, #b45309 0%, #f59e0b 100%); /* amber-700 → amber-500 */
+}
+/* Optional dark TikTok card background for index */
+.bg-tool-black {
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+}
+.bg-tool-gold {
+  background: linear-gradient(135deg, #7e6812 0%, #d4b70f 100%);
+}
+
+/* Accessibility: focus ring for keyboard users on stretched links */
+a.stretched-link:focus-visible {
+  outline: 3px solid rgba(255,255,255,0.9);
+  outline-offset: 4px;
+  border-radius: 0.75rem;
+}
+/* Soft white-overlaid card look */
+.soft-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.92));
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 0.75rem;
+}
+
+/* Little term “chip” */
+.badge-chip {
+  display: inline-block;
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+
+.soft-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.95));
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 0.75rem;
+}

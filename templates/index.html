@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<!-- Hero -->
+<section class="tool-hero text-center p-5 text-white rounded mb-5 position-relative overflow-hidden">
+  <div class="hero-overlay"></div>
+  <h1 class="display-5 fw-semibold">ASD's Research & OSINT Tools Explorer</h1>
+  <p class="lead mb-4">A suite of one-off tools to assist in research, analysis, and OSINT workflows.</p>
+  <a href="#tools" class="btn btn-accent btn-lg">View Tools</a>
+</section>
+
+<!-- Tools grid -->
+<div id="tools" class="row g-4">
+  {% for tool in tools %}
+  <div class="col-md-6 col-lg-4">
+    <div class="tool-card card h-100 border-0 shadow-sm {{ tool.bg }}">
+      <!-- soft white overlay -->
+      <div class="tool-card-overlay"></div>
+
+      <div class="card-body position-relative">
+        <!-- big white icon watermark -->
+        <i class="{{ tool.icon }} tool-icon" aria-hidden="true"></i>
+
+        <h5 class="card-title text-white mb-2">{{ tool.name }}</h5>
+        <p class="card-text text-white-75 mb-0">{{ tool.description }}</p>
+
+        <!-- subtle footer chevron -->
+        <div class="mt-3 small text-white-75 d-flex align-items-center gap-2">
+          <span>Open tool</span>
+          <i class="fa-solid fa-arrow-right-long"></i>
+        </div>
+
+        <a href="{{ tool.url }}" class="stretched-link" aria-label="Open {{ tool.name }}"></a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

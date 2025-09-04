@@ -1,0 +1,84 @@
+<div class="soft-card p-3 mb-3">
+  <div class="row g-3">
+    <div class="col-md-2">
+      <label class="form-label">Region</label>
+      <input type="text" class="form-control" name="region" value="{{ request.form.region or 'PL' }}" placeholder="e.g., US, PL">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Query Type</label>
+      <input type="text" class="form-control" name="query_type" value="{{ request.form.query_type or '1' }}">
+      <div class="form-text">Defaults to 1.</div>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Advertiser Biz IDs (optional)</label>
+      <input type="text" class="form-control" name="adv_biz_ids" value="{{ request.form.adv_biz_ids or '' }}" placeholder="Comma-separated">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Order</label>
+      <input type="text" class="form-control" name="order" value="{{ request.form.order or 'last_shown_date,desc' }}">
+    </div>
+  </div>
+</div>
+
+<div class="soft-card p-3 mb-3">
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Date Range Mode</label>
+      <div class="d-flex gap-3">
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="range_mode" id="rel" value="relative" {% if (request.form.range_mode or 'relative') == 'relative' %}checked{% endif %}>
+          <label class="form-check-label" for="rel">Relative</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="range_mode" id="cust" value="custom" {% if request.form.range_mode == 'custom' %}checked{% endif %}>
+          <label class="form-check-label" for="cust">Custom</label>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Months Back</label>
+      <input type="number" class="form-control" name="months_back" min="1" max="24" value="{{ request.form.months_back or 1 }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Start Date (UTC)</label>
+      <input type="date" class="form-control" name="start_date" value="{{ request.form.start_date or '' }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">End Date (UTC)</label>
+      <input type="date" class="form-control" name="end_date" value="{{ request.form.end_date or '' }}">
+    </div>
+  </div>
+  <div class="form-text">If “Custom” is selected, dates are interpreted as UTC and the end date is inclusive.</div>
+</div>
+
+<div class="soft-card p-3 mb-3">
+  <div class="row g-3">
+    <div class="col-md-3">
+      <label class="form-label">Page Size</label>
+      <input type="number" class="form-control" name="page_size" min="1" max="50" value="{{ request.form.page_size or 20 }}">
+      <div class="form-text">Max 50.</div>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Per-Term Max Items</label>
+      <input type="number" class="form-control" name="per_term_max_items" min="0" value="{{ request.form.per_term_max_items or 500 }}">
+      <div class="form-text">0 means no cap.</div>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Polite Sleep (seconds)</label>
+      <input type="number" step="0.1" class="form-control" name="polite_sleep" min="0" value="{{ request.form.polite_sleep or 1.0 }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Output</label>
+      <div class="d-flex gap-3">
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="output_mode" id="table" value="table" {% if request.form.output_mode != 'excel' %}checked{% endif %}>
+          <label class="form-check-label" for="table">Table</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="output_mode" id="excel" value="excel" {% if request.form.output_mode == 'excel' %}checked{% endif %}>
+          <label class="form-check-label" for="excel">Excel</label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

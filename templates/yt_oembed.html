@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block content %}
+{% set results = results|default({}) %}
+
+<h2 class="mb-4">YouTube Videos Metadata Extractor</h2>
+<p>Provide a list of YouTube URLs, choose your output, and I will query YouTube’s oEmbed endpoint for metadata and status.</p>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#paste">Paste URLs</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#file">Upload File</a></li>
+</ul>
+
+<div class="tab-content">
+  <!-- Paste -->
+  <div class="tab-pane fade show active" id="paste">
+    <form method="post">
+      <input type="hidden" name="mode" value="paste">
+      <div class="mb-3">
+        <label class="form-label">URLs (one per line, or paste text that contains URLs)</label>
+        <textarea class="form-control" name="urls" rows="8" placeholder="https://www.youtube.com/watch?v=XiUOBdEUqjY&#10;https://youtu.be/dQw4w9WgXcQ">{{ request.form.urls or '' }}</textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Output</label>
+        <div class="d-flex gap-3">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="table1" value="table" {% if request.form.output_mode != 'excel' and request.form.output_mode != 'csv' %}checked{% endif %}>
+            <label class="form-check-label" for="table1">Table (on-page)</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="excel1" value="excel" {% if request.form.output_mode == 'excel' %}checked{% endif %}>
+            <label class="form-check-label" for="excel1">Download Excel</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="csv1" value="csv" {% if request.form.output_mode == 'csv' %}checked{% endif %}>
+            <label class="form-check-label" for="csv1">Download CSV</label>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Check URLs</button>
+    </form>
+  </div>
+
+  <!-- File -->
+  <div class="tab-pane fade" id="file">
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="mode" value="file">
+      <div class="mb-3">
+        <label class="form-label">Upload .txt or .csv</label>
+        <input type="file" class="form-control" name="url_file" accept=".txt,.csv,text/plain,text/csv">
+        <div class="form-text">
+          TXT: One URL per line. CSV: Include a "url" column if possible; otherwise, the first column will be used and any embedded URLs will be extracted.
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Output</label>
+        <div class="d-flex gap-3">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="table2" value="table" checked>
+            <label class="form-check-label" for="table2">Table (on-page)</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="excel2" value="excel">
+            <label class="form-check-label" for="excel2">Download Excel</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="csv2" value="csv">
+            <label class="form-check-label" for="csv2">Download CSV</label>
+          </div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Check File</button>
+    </form>
+  </div>
+</div>
+
+{% if results.table_rows is defined and results.table_rows %}
+  <h5 class="mt-4">Results</h5>
+  <ul class="list-unstyled small text-muted">
+    <li>Total: {{ results.total }}</li>
+    <li>Found: {{ results.found }}</li>
+    <li>Not Found: {{ results.not_found }}</li>
+    <li>Bad Request: {{ results.bad_request }}</li>
+    <li>Errors: {{ results.errors }}</li>
+  </ul>
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Input URL</th>
+          <th>Status</th>
+          <th>HTTP</th>
+          <th>Title</th>
+          <th>Author</th>
+          <th>Provider</th>
+          <th>Thumbnail</th>
+          <th>Embed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in results.table_rows %}
+        <tr>
+          <td style="max-width: 360px; word-break: break-all;"><a href="{{ row.input_url }}" target="_blank" rel="noopener">{{ row.input_url }}</a></td>
+          <td>{{ row.status }}</td>
+          <td>{{ row.status_code or '' }}</td>
+          <td>{{ row.title or '' }}</td>
+          <td>
+            {% if row.author_url %}
+              <a href="{{ row.author_url }}" target="_blank" rel="noopener">{{ row.author_name or row.author_url }}</a>
+            {% else %}
+              {{ row.author_name or '' }}
+            {% endif %}
+          </td>
+          <td>
+            {% if row.provider_url %}
+              <a href="{{ row.provider_url }}" target="_blank" rel="noopener">{{ row.provider_name or row.provider_url }}</a>
+            {% else %}
+              {{ row.provider_name or '' }}
+            {% endif %}
+          </td>
+          <td>
+            {% if row.thumbnail_url %}
+              <a href="{{ row.thumbnail_url }}" target="_blank" rel="noopener">Thumb</a>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.embed_src %}
+              <a href="{{ row.embed_src }}" target="_blank" rel="noopener">Embed</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% block content %}
+{% set results = results|default({}) %}
+<h2 class="mb-4">Text Extractor</h2>
+<p>Select input type and provide your regex pattern:</p>
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#text">Text</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#json">Telegram JSON</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#db">Database</a></li>
+</ul>
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="text">
+    <form method="post">
+      <input type="hidden" name="mode" value="text">
+      <div class="mb-3">
+        <label class="form-label">Regex Pattern</label>
+        <input type="text" class="form-control" name="regex" placeholder="e.g. @([A-Za-z0-9_]+)"
+          value="{{ request.form.regex or '' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Text Input</label>
+        <textarea class="form-control" name="text" rows="5">{{ request.form.text or '' }}</textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Extract</button>
+    </form>
+    {% if results.text_counts is defined and results.text_counts %}
+    <h5 class="mt-4">Results</h5>
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Pattern</th>
+          <th>Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in results.text_counts %}
+        <tr>
+          <td>{{ row.pattern }}</td>
+          <td>{{ row.count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  <div class="tab-pane fade" id="json">
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="mode" value="json">
+      <div class="mb-3">
+        <label class="form-label">Regex Pattern</label>
+        <input type="text" class="form-control" name="regex" placeholder="e.g. @([A-Za-z0-9_]+)"
+          value="{{ request.form.regex or '' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Telegram JSON Files</label>
+        <input type="file" class="form-control" name="json_files" accept="application/json" multiple>
+        <div class="form-text">
+          Upload one or more Telegram export JSON files. Results are grouped by channel name, channel id, and filename.
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Extract</button>
+    </form>
+  </div>
+
+  {% if results.json_multi_summary is defined and results.json_multi_summary %}
+  <h5 class="mt-4">Per-File Summary</h5>
+  <div class="table-responsive">
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Channel Name</th>
+          <th>Channel ID</th>
+          <th>Filename</th>
+          <th>Messages</th>
+          <th>Matches</th>
+          <th>Mentions</th>
+          <th>Hashtags</th>
+          <th>Links</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in results.json_multi_summary %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.channel_id }}</td>
+          <td>{{ row.filename }}</td>
+          <td>{{ row.messages }}</td>
+          <td>{{ row.matches }}</td>
+          <td>{{ row.mentions }}</td>
+          <td>{{ row.hashtags }}</td>
+          <td>{{ row.links }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% if results.hashtags is defined and results.hashtags %}
+<h5 class="mt-4">Hashtags</h5>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Pattern</th>
+      <th>Count</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in results.hashtags %}
+    <tr>
+      <td>{{ row.pattern }}</td>
+      <td>{{ row.count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% if results.links is defined and results.links %}
+<h5 class="mt-4">Links</h5>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>URL</th>
+      <th>Count</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in results.links %}
+    <tr>
+      <td>{{ row.pattern }}</td>
+      <td>{{ row.count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+</div>
+<div class="tab-pane fade" id="db">
+  <form method="post">
+    <input type="hidden" name="mode" value="db">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label">Regex Pattern</label>
+        <input class="form-control" name="regex" placeholder="e.g. @([A-Za-z0-9_]+)"
+          value="{{ request.form.regex or '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Server</label>
+        <input class="form-control" name="server" value="{{ request.form.server or '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Database</label>
+        <input class="form-control" name="database" value="{{ request.form.database or '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Username</label>
+        <input class="form-control" name="username" value="{{ request.form.username or '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-control" name="password">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Table</label>
+        <input class="form-control" name="table" value="{{ request.form.table or '' }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Column</label>
+        <input class="form-control" name="column" value="{{ request.form.column or 'raw_text' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Limit</label>
+        <input type="number" class="form-control" name="limit" value="{{ request.form.limit or '' }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Order By</label>
+        <input class="form-control" name="order_by" value="{{ request.form.order_by or '' }}">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary mt-3">Extract</button>
+  </form>
+  {% if results.db_counts is defined and results.db_counts %}
+  <h5 class="mt-4">Results</h5>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Pattern</th>
+        <th>Count</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in results.db_counts %}
+      <tr>
+        <td>{{ row.pattern }}</td>
+        <td>{{ row.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block content %}
+{% set results = results|default({}) %}
+
+<h2 class="mb-4 d-flex align-items-center gap-2">
+  <i class="fa-brands fa-tiktok text-dark"></i>
+  TikTok Ad Library Search
+</h2>
+<p>Search the TikTok Ad Library for multiple terms, via raw input or a CSV. Choose a date range, region, and output format.</p>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#raw">Raw Terms</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#csv">CSV Upload</a></li>
+</ul>
+
+<div class="tab-content">
+  <!-- Raw input -->
+  <div class="tab-pane fade show active" id="raw">
+    <form method="post">
+      <input type="hidden" name="mode" value="raw">
+
+      <div class="soft-card p-3 mb-3">
+        <label class="form-label">Terms (comma or line separated)</label>
+        <textarea name="terms_input" class="form-control" rows="5" placeholder="e.g. wybory parlamentarne, prezydent RP&#10;koalicja">{{ request.form.terms_input or '' }}</textarea>
+        <div class="form-text">Both commas and newlines are accepted. Duplicates are removed.</div>
+      </div>
+
+      {% include 'tiktok_shared_controls.html' %}
+
+      <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+  </div>
+
+  <!-- CSV mode -->
+  <div class="tab-pane fade" id="csv">
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="mode" value="csv">
+
+      <div class="soft-card p-3 mb-3">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label">CSV File</label>
+            <input type="file" class="form-control" name="csv_file" accept=".csv,text/csv" required>
+            <div class="form-text">We will auto-pick the first text-like column if you leave the column name blank.</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Column Name (optional)</label>
+            <input type="text" class="form-control" name="csv_column" placeholder="e.g., query">
+          </div>
+        </div>
+      </div>
+
+      {% include 'tiktok_shared_controls.html' %}
+
+      <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+  </div>
+</div>
+
+{% if results.error %}
+  <div class="alert alert-danger mt-4">{{ results.error }}</div>
+{% endif %}
+
+{% if results.ok %}
+  <div class="mt-4">
+    <h5 class="mb-2">Summary</h5>
+    <div class="table-responsive">
+      <table class="table table-striped table-sm">
+        <thead>
+          <tr>
+            <th>Search Term</th><th>Items</th><th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in results.summary %}
+          <tr>
+            <td>{{ row.search_term }}</td>
+            <td>{{ row.items_collected }}</td>
+            <td>{{ row.error }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="text-muted small mb-1">Total Records: {{ results.total_records }}</p>
+
+    {% if results.preview and results.preview|length > 0 %}
+    <h6 class="mt-3">Preview (first 100 rows)</h6>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm">
+        <thead>
+          <tr>
+            <th>ID</th><th>Name</th><th>First Shown</th><th>Last Shown</th><th>Impressions</th><th>Spent</th><th>Search Term</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in results.preview %}
+          <tr>
+            <td>{{ r.id }}</td>
+            <td>{{ r.name }}</td>
+            <td>{{ r.first_shown_date }}</td>
+            <td>{{ r.last_shown_date }}</td>
+            <td>{{ r.impression }}</td>
+            <td>{{ r.spent }}</td>
+            <td><span class="badge-chip">{{ r.search_term }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% endblock %}

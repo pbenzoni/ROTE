@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Lexical/Sentiment Analysis</h2>
+
+<form method="post" enctype="multipart/form-data">
+  <!-- Language selector -->
+  <div class="mb-3">
+    <label class="form-label">Language</label>
+    {% set current_lang = request.form.lang or 'en' %}
+    <select name="lang" class="form-select">
+      <option value="en" {% if current_lang == 'en' %}selected{% endif %}>English</option>
+      <option value="es" {% if current_lang == 'es' %}selected{% endif %}>Español</option>
+    </select>
+    <div class="form-text">
+      English uses VADER for sentiment; Spanish uses a lightweight, lexicon-based negative-intensity score.
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">CSV OR Excel File</label>
+    <input type="file" name="csv_file" class="form-control" accept=".csv,.xlsx,.xlsm,.xlsb,.xls">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Text Column to Analyze</label>
+    <input name="text_column" class="form-control" value="{{ request.form.text_column or '' }}">
+  </div>
+  <div class="mb-3">
+  <label class="form-label">Filter (optional)</label>
+  <textarea name="filter_query" class="form-control" rows="2" placeholder="e.g., ukraine, nato">{{ request.form.filter_query or '' }}</textarea>
+  <div class="form-text">
+    Only rows whose text contains the terms will be analyzed. Separate terms with commas or new lines.
+  </div>
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <label class="form-label">Filter Logic</label>
+    {% set fl = (request.form.filter_logic or 'any') %}
+    <select name="filter_logic" class="form-select">
+      <option value="any" {% if fl=='any' %}selected{% endif %}>Match any term</option>
+      <option value="all" {% if fl=='all' %}selected{% endif %}>Match all terms</option>
+    </select>
+  </div>
+  <div class="col-md-3 d-flex align-items-end">
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="filter_regex" name="filter_regex" {% if request.form.filter_regex %}checked{% endif %}>
+      <label class="form-check-label" for="filter_regex">Treat terms as regular expressions</label>
+    </div>
+  </div>
+</div>
+  <div class="mb-3">
+    <label class="form-label">Group-By Column (optional)</label>
+    <input name="group_column" class="form-control" value="{{ request.form.group_column or '' }}">
+  </div>
+
+  <button class="btn btn-primary" type="submit">Display Analysis in Browser</button>
+  <button name="format" value="excel" class="btn btn-secondary" type="submit">Download Analysis as Excel</button>
+</form>
+
+{% if results.group_freqs %}
+  <h4 class="mt-4">Top Terms per Group</h4>
+  {% for group, summary in results.group_freqs.items() %}
+    <div class="mb-3">
+      <h5>{{ group }}</h5>
+      <div>
+        <strong>Total Token Equivalents:</strong> {{ summary.total_token_equivalents }}
+      </div>
+      <div class="row">
+        <div class="col-md-6">
+          <h6>Top Normalized Terms (per-thousand rate)</h6>
+          <table class="table table-sm">
+            <thead><tr><th>Term</th><th>Normalized</th></tr></thead>
+            <tbody>
+              {% for term, val in summary.top_normalized.items() %}
+                <tr><td>{{ term }}</td><td>{{ val }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="col-md-6">
+          <h6>Top Raw Terms</h6>
+          <table class="table table-sm">
+            <thead><tr><th>Term</th><th>Count</th></tr></thead>
+            <tbody>
+              {% for term, val in summary.top_raw.items() %}
+                <tr><td>{{ term }}</td><td>{{ val }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% if results.meta and results.meta[group] %}
+        <div class="mt-2">
+          <h6>Meta Summary</h6>
+          <div class="row">
+            <div class="col-md-2">
+              <strong>Mentions</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group].mentions.items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="col-md-2">
+              <strong>Hashtags</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group].hashtags.items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="col-md-2">
+              <strong>Links</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group].links.items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="col-md-2">
+              <strong>Domains</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group].domains.items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="col-md-2">
+              <strong>Entities</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group].entities.items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+    <hr/>
+  {% endfor %}
+{% endif %}
+
+{% if results.differential %}
+  <h4 class="mt-4">Differential ({{ results.differential_groups[0] }} vs {{ results.differential_groups[1] }})</h4>
+  <p>
+    Columns explanation: Raw counts show absolute occurrences, normalized values are per-thousand-token-equivalent rates to adjust for volume differences, 
+    <strong>differential_norm</strong> is the difference between normalized rates (first group minus second), so positive means relatively more prevalent in the first group.
+  </p>
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Term</th>
+        <th>{{ results.differential_groups[0] }} Raw</th>
+        <th>{{ results.differential_groups[1] }} Raw</th>
+        <th>{{ results.differential_groups[0] }} Norm</th>
+        <th>{{ results.differential_groups[1] }} Norm</th>
+        <th>Normalized Differential</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in results.differential %}
+        <tr>
+          <td>{{ row.term }}</td>
+          <td>{{ row[results.differential_groups[0] + "_raw"] }}</td>
+          <td>{{ row[results.differential_groups[1] + "_raw"] }}</td>
+          <td>{{ row[results.differential_groups[0] + "_norm"] }}</td>
+          <td>{{ row[results.differential_groups[1] + "_norm"] }}</td>
+          <td>{{ row.differential_norm }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+{% if results.sentiment_summary %}
+  <h4 class="mt-4">Sentiment Summary</h4>
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Group</th>
+        <th>Count Nonzero</th>
+        <th>Mean Negative Intensity</th>
+        <th>95% CI</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in results.sentiment_summary %}
+        <tr>
+          <td>{{ r['group'] }}</td>
+          <td>{{ r['count_nonzero'] }}</td>
+          <td>{{ "%.3f"|format(r['mean_neg_intensity']) }}</td>
+          <td>{{ "%.3f"|format(r['95ci_lower']) }} – {{ "%.3f"|format(r['95ci_upper']) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}
