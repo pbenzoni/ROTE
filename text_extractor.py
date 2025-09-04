@@ -8,34 +8,34 @@ from typing import Iterable, Tuple
 
 import pandas as pd
 from flask import Blueprint, render_template, request, send_file
-from sqlalchemy import create_engine
+#from sqlalchemy import create_engine
 
 text_bp = Blueprint('text_extractor', __name__, template_folder='templates')
 
-##### DATABASE FUNCTIONS #####
-def get_engine(server: str,
-               database: str,
-               username: str,
-               password: str,
-               driver: str = "ODBC Driver 17 for SQL Server"):
-    conn_str = (
-        f"mssql+pyodbc://{username}:{password}@{server}/{database}"
-        f"?driver={driver.replace(' ', '+')}"
-    )
-    return create_engine(conn_str)
+# ##### DATABASE FUNCTIONS #####
+# def get_engine(server: str,
+#                database: str,
+#                username: str,
+#                password: str,
+#                driver: str = "ODBC Driver 17 for SQL Server"):
+#     conn_str = (
+#         f"mssql+pyodbc://{username}:{password}@{server}/{database}"
+#         f"?driver={driver.replace(' ', '+')}"
+#     )
+#     return create_engine(conn_str)
 
 
-def fetch_raw_text(engine,
-                   table: str,
-                   column: str,
-                   like_phrase: str = '@',
-                   limit: int = None,
-                   order_by: str = None):
-    where = f"{column} LIKE '%{like_phrase}%'"
-    top = f"TOP {limit}" if limit else ""
-    order = f"ORDER BY {order_by} DESC" if order_by else ""
-    query = f"SELECT {top} {column} FROM {table} WHERE {where} {order};"
-    return pd.read_sql_query(query, engine)
+# def fetch_raw_text(engine,
+#                    table: str,
+#                    column: str,
+#                    like_phrase: str = '@',
+#                    limit: int = None,
+#                    order_by: str = None):
+#     where = f"{column} LIKE '%{like_phrase}%'"
+#     top = f"TOP {limit}" if limit else ""
+#     order = f"ORDER BY {order_by} DESC" if order_by else ""
+#     query = f"SELECT {top} {column} FROM {table} WHERE {where} {order};"
+#     return pd.read_sql_query(query, engine)
 
 ##### TELEGRAM HELPERS #####
 def _flatten_telegram_text(msg) -> Tuple[str, list, list, list]:
@@ -282,29 +282,29 @@ def extract():
 
             filename = 'json_extract_multi.xlsx'
 
-        elif mode == 'db':
-            server = request.form.get('server')
-            database = request.form.get('database')
-            username = request.form.get('username')
-            password = request.form.get('password')
-            table = request.form.get('table')
-            column = request.form.get('column') or 'raw_text'
-            limit = request.form.get('limit') or None
-            order_by = request.form.get('order_by') or None
-            engine = get_engine(server, database, username, password)
-            df_text = fetch_raw_text(
-                engine, table, column,
-                limit=int(limit) if limit else None,
-                order_by=order_by
-            )
-            matches = extract_pattern_from_text(df_text[column], regex)
-            df = (
-                pd.DataFrame(Counter(matches).items(), columns=['pattern', 'count'])
-                  .sort_values('count', ascending=False)
-                  .reset_index(drop=True)
-            )
-            sheets['results'] = df
-            filename = 'db_extract.xlsx'
+        # elif mode == 'db':
+        #     server = request.form.get('server')
+        #     database = request.form.get('database')
+        #     username = request.form.get('username')
+        #     password = request.form.get('password')
+        #     table = request.form.get('table')
+        #     column = request.form.get('column') or 'raw_text'
+        #     limit = request.form.get('limit') or None
+        #     order_by = request.form.get('order_by') or None
+        #     engine = get_engine(server, database, username, password)
+        #     df_text = fetch_raw_text(
+        #         engine, table, column,
+        #         limit=int(limit) if limit else None,
+        #         order_by=order_by
+        #     )
+        #     matches = extract_pattern_from_text(df_text[column], regex)
+        #     df = (
+        #         pd.DataFrame(Counter(matches).items(), columns=['pattern', 'count'])
+        #           .sort_values('count', ascending=False)
+        #           .reset_index(drop=True)
+        #     )
+        #     sheets['results'] = df
+        #     filename = 'db_extract.xlsx'
 
         # Create Excel file in memory
         output = BytesIO()
