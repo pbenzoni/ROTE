@@ -19,6 +19,20 @@ import spacy
 from io import BytesIO
 from datetime import datetime  # fixed import
 
+# NEW: optional lxml import for HTML parsing
+try:
+    from lxml import html as lxml_html
+except Exception:
+    lxml_html = None
+
+# NEW: truthy parser for request flags
+def _truthy(v) -> bool:
+    if v is None:
+        return False
+    if isinstance(v, bool):
+        return v
+    return str(v).strip().lower() in {"1", "true", "on", "yes", "y", "t"}
+
 # --- NLTK resources ---
 nltk.download("stopwords", quiet=True)
 nltk.download("punkt", quiet=True)
@@ -36,9 +50,15 @@ def _load_spacy(lang: str):
         # Fallback: blank pipeline (no NER), keeps everything else working
         return spacy.blank("es" if lang == "es" else "en")
 
-# Pre-load both so we avoid reloading per request
-NLP_EN = _load_spacy("en")
-NLP_ES = _load_spacy("es")
+# Pre-load cache; load lazily depending on flags
+NLP_CACHE = {"en_full": None, "es_full": None, "en_blank": None, "es_blank": None}
+
+def _get_nlp(lang: str, use_ner: bool = True):
+    code = "es" if lang == "es" else "en"
+    key = f"{code}_{'full' if use_ner else 'blank'}"
+    if NLP_CACHE[key] is None:
+        NLP_CACHE[key] = _load_spacy(code) if use_ner else spacy.blank(code)
+    return NLP_CACHE[key]
 
 # --- Stopword sets ---
 STOP_EN = set(stopwords.words("english"))
@@ -66,9 +86,6 @@ def _strip_accents(s: str) -> str:
 def _parse_language() -> str:
     lang = (request.form.get("lang") or "en").strip().lower()
     return "es" if lang.startswith("es") else "en"
-
-def _get_nlp(lang: str):
-    return NLP_ES if lang == "es" else NLP_EN
 
 def _get_stopwords(lang: str):
     return STOP_ES if lang == "es" else STOP_EN
@@ -147,6 +164,42 @@ def extract_meta(text: str) -> Tuple[List[str], List[str], List[str], List[str]]
         except Exception:
             continue
     return mentions, hashtags, links, domains
+
+def extract_embedded_links(article_clean_top_node):
+    # Find all URLs in the HTML content
+    urls = article_clean_top_node.xpath("//a/@href")
+
+    return urls
+
+def extract_tweet_details(article_clean_top_node):
+    # Find all embedded tweets using the appropriate class name
+    embedded_tweets = article_clean_top_node.xpath(".//blockquote[contains(@class, 'twitter-tweet')]")
+
+    tweets_data = []
+
+    for tweet in embedded_tweets:
+        tweet_data = {}
+
+        # The tweet URL is typically contained within the last <a> tag in the blockquote.
+        tweet_link = tweet.xpath(".//a/@href")[-1] if tweet.xpath(".//a/@href") else None
+        if tweet_link:
+            tweet_data['tweetLink'] = tweet_link
+            
+            # Extract tweet ID from the tweet URL
+            tweet_data['tweetId'] = tweet_link.split('/')[-1]
+            
+            # Extract the screen name from the tweet URL
+            parts = tweet_link.split('/')
+            tweet_data['screenName'] = parts[-3] if len(parts) > 3 else None
+
+        # The full text of the tweet is contained in the <p> tag within the blockquote
+        tweet_text_list = tweet.xpath(".//p//text()")
+        tweet_data['tweetText'] = ''.join(tweet_text_list).strip() if tweet_text_list else None
+
+        tweets_data.append(tweet_data)
+
+    return tweets_data
+
 
 def tokenize(text: str, lang: str) -> List[str]:
     """
@@ -320,6 +373,7 @@ def _load_dataframe_from_upload(file_storage, sheet_name: Optional[str] = None) 
         # Retry with delimiter sniffing using the Python engine
         bio.seek(0)
         return pd.read_csv(bio, sep=None, engine="python")
+    
 @lexicon_bp.route("/", methods=["GET", "POST"])
 def upload_and_process():
     results: Dict = {}
@@ -347,6 +401,22 @@ def upload_and_process():
         columns = df.columns.tolist()
         text_col = request.form.get("text_column")
         group_col = request.form.get("group_column") or None
+
+        # NEW: toggles for optional NLP work
+        enable_tokens = _truthy(request.form.get("enable_tokens", "true"))
+        enable_entities = _truthy(request.form.get("enable_entities", "true"))
+        enable_sentiment = _truthy(request.form.get("enable_sentiment", "true"))
+        # NEW: toggle for social profile extraction
+        enable_social_profiles = _truthy(request.form.get("enable_social_profiles", "true"))
+
+        # NEW: optional HTML text column name (for XPath parsing)
+        html_col = (request.form.get("html_column") or "").strip() or None
+        if html_col and html_col not in df.columns:
+            flash(f"HTML column '{html_col}' not found in data", "warning")
+            html_col = None
+        if html_col and lxml_html is None:
+            flash("lxml is not available; HTML parsing is disabled. Install 'lxml' to enable.", "warning")
+            html_col = None
 
         if not text_col or text_col not in df.columns:
             flash("Text column not provided or invalid", "danger")
@@ -382,12 +452,20 @@ def upload_and_process():
         # --- Clean + extract ---
         df["clean_text"] = df[text_col].apply(clean_text)
 
-        # Tokens + entities
-        df["tokens"] = df["clean_text"].apply(lambda t: tokenize(t, lang))
-        nlp = _get_nlp(lang)
-        df["entities"] = df["clean_text"].apply(
-            lambda t: [ent.text for ent in nlp(t).ents] if nlp.has_pipe("ner") else []
-        )
+        # Tokens (optional)
+        if enable_tokens:
+            df["tokens"] = df["clean_text"].apply(lambda t: tokenize(t, lang))
+        else:
+            df["tokens"] = [[] for _ in range(len(df))]
+
+        # Entities (optional, lazy spaCy)
+        if enable_entities:
+            nlp = _get_nlp(lang, use_ner=True)
+            df["entities"] = df["clean_text"].apply(
+                lambda t: [ent.text for ent in nlp(t).ents] if nlp.has_pipe("ner") else []
+            )
+        else:
+            df["entities"] = [[] for _ in range(len(df))]
 
         # Links, mentions, hashtags, domains
         meta = df[text_col].apply(extract_meta)
@@ -395,6 +473,35 @@ def upload_and_process():
         df["hashtags"] = meta.apply(lambda x: x[1])
         df["links"] = meta.apply(lambda x: x[2])
         df["domains"] = meta.apply(lambda x: x[3])
+
+        # NEW: Social media profiles (from original text with URLs)
+        if enable_social_profiles:
+            df["social_profiles"] = df[text_col].apply(extract_social_media_profiles)
+            df["social_profile_pairs"] = df["social_profiles"].apply(
+                lambda d: [f"{platform}:{handle}" for platform, handles in (d or {}).items() for handle in handles]
+            )
+            df["social_platforms"] = df["social_profiles"].apply(
+                lambda d: [platform for platform, handles in (d or {}).items() for _ in handles]
+            )
+
+        # NEW: HTML parsing with XPath (embedded links + tweets)
+        if html_col:
+            df["__html_root"] = df[html_col].apply(_safe_parse_html)
+            df["embedded_links_xpath"] = df["__html_root"].apply(
+                lambda node: (extract_embedded_links(node) if node is not None else [])
+            )
+            df["embedded_tweets"] = df["__html_root"].apply(
+                lambda node: (extract_tweet_details(node) if node is not None else [])
+            )
+            # Convenience lists for counting
+            df["tweet_ids"] = df["embedded_tweets"].apply(
+                lambda lst: [d.get("tweetId") for d in lst if isinstance(d, dict) and d.get("tweetId")]
+            )
+            df["tweet_screen_names"] = df["embedded_tweets"].apply(
+                lambda lst: [d.get("screenName") for d in lst if isinstance(d, dict) and d.get("screenName")]
+            )
+            # Clean up heavy roots to keep memory down
+            del df["__html_root"]
 
         # Grouping
         if group_col and group_col in df.columns:
@@ -404,34 +511,38 @@ def upload_and_process():
             df[group_col] = "all"
             groups = ["all"]
 
-        # Frequencies
-        group_freqs = {}
-        for g in groups:
-            token_lists = df[df[group_col] == g]["tokens"].tolist()
-            group_freqs[g] = build_frequency_series(token_lists, include_ngrams=(1, 2, 3))
+        # Frequencies (optional; only when tokens are enabled)
+        if enable_tokens:
+            group_freqs = {}
+            for g in groups:
+                token_lists = df[df[group_col] == g]["tokens"].tolist()
+                group_freqs[g] = build_frequency_series(token_lists, include_ngrams=(1, 2, 3))
 
-        # Summaries per group
-        summary_per_group = {}
-        for g in group_freqs:
-            norm = group_freqs[g]["normalized"].sort_values(ascending=False).head(1000)
-            raw = group_freqs[g]["raw"].sort_values(ascending=False).head(1000)
-            summary_per_group[g] = {
-                "top_normalized": norm.round(4).to_dict(),
-                "top_raw": raw.to_dict(),
-                "total_token_equivalents": group_freqs[g]["total_token_equivalents"],
-            }
-        results["group_freqs"] = summary_per_group
+            # Summaries per group
+            summary_per_group = {}
+            for g in group_freqs:
+                norm = group_freqs[g]["normalized"].sort_values(ascending=False).head(1000)
+                raw = group_freqs[g]["raw"].sort_values(ascending=False).head(1000)
+                summary_per_group[g] = {
+                    "top_normalized": norm.round(4).to_dict(),
+                    "top_raw": raw.to_dict(),
+                    "total_token_equivalents": group_freqs[g]["total_token_equivalents"],
+                }
+            results["group_freqs"] = summary_per_group
 
-        # Differential if exactly two groups
-        if len(groups) == 2:
-            a, b = list(groups)
-            diff_df = differential_dataframe(group_freqs, a, b, top_n=100)
-            results["differential"] = diff_df.to_dict(orient="records")
-            results["differential_groups"] = (a, b)
+            # Differential if exactly two groups
+            if len(groups) == 2:
+                a, b = list(groups)
+                diff_df = differential_dataframe(group_freqs, a, b, top_n=100)
+                results["differential"] = diff_df.to_dict(orient="records")
+                results["differential_groups"] = (a, b)
 
-        # Sentiment (language-aware)
-        sentiment_df = sentiment_summary(df, "clean_text", group_col, lang)
-        results["sentiment_summary"] = sentiment_df.to_dict(orient="records")
+        # Sentiment (optional, language-aware)
+        if enable_sentiment:
+            sentiment_df = sentiment_summary(df, "clean_text", group_col, lang)
+            results["sentiment_summary"] = sentiment_df.to_dict(orient="records")
+        else:
+            results["sentiment_summary"] = []
 
         # Meta counts
         meta_summary = {}
@@ -444,6 +555,18 @@ def upload_and_process():
                 "domains": cum_counts(subset["domains"]).to_dict(),
                 "entities": cum_counts(subset["entities"]).to_dict(),
             }
+            # NEW: add HTML-derived meta if present
+            if "embedded_links_xpath" in df.columns:
+                meta_summary[g]["embedded_links_xpath"] = cum_counts(subset["embedded_links_xpath"]).to_dict()
+            if "tweet_ids" in df.columns:
+                meta_summary[g]["tweet_ids"] = cum_counts(subset["tweet_ids"]).to_dict()
+            if "tweet_screen_names" in df.columns:
+                meta_summary[g]["tweet_screen_names"] = cum_counts(subset["tweet_screen_names"]).to_dict()
+            # NEW: add social profiles if present
+            if "social_profile_pairs" in df.columns:
+                meta_summary[g]["social_profile_pairs"] = cum_counts(subset["social_profile_pairs"]).to_dict()
+            if "social_platforms" in df.columns:
+                meta_summary[g]["social_platforms"] = cum_counts(subset["social_platforms"]).to_dict()
         results["meta"] = meta_summary
 
     # Excel export (unified group handling + filter META)
@@ -481,8 +604,23 @@ def upload_and_process():
         if totals_rows:
             sheets["GROUP_TOTALS"] = pd.DataFrame(totals_rows).sort_values("group").reset_index(drop=True)
 
-        # === Meta counts (mentions, hashtags, links, domains, entities) ===
-        for meta_key in ["mentions", "hashtags", "links", "domains", "entities"]:
+        # === Meta counts (mentions, hashtags, links, domains, entities, + HTML) ===
+        meta_keys = ["mentions", "hashtags", "links", "domains", "entities"]
+        # Add optional HTML-derived keys if present
+        any_meta = results.get("meta") or {}
+        if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["embedded_links_xpath"]):
+            meta_keys.append("embedded_links_xpath")
+        if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["tweet_ids"]):
+            meta_keys.append("tweet_ids")
+        if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["tweet_screen_names"]):
+            meta_keys.append("tweet_screen_names")
+        # NEW: add social profile meta keys if present
+        if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["social_profile_pairs"]):
+            meta_keys.append("social_profile_pairs")
+        if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["social_platforms"]):
+            meta_keys.append("social_platforms")
+
+        for meta_key in meta_keys:
             meta_rows = []
             for group, metas in results.get("meta", {}).items():
                 for val, count in (metas or {}).get(meta_key, {}).items():
@@ -502,7 +640,25 @@ def upload_and_process():
         if results.get("sentiment_summary"):
             sheets["SENTIMENT_SUMMARY"] = pd.DataFrame(results["sentiment_summary"])
 
-        # === META (record filter + language) ===
+        # NEW: Detailed embedded tweets sheet (flattened)
+        if "embedded_tweets" in df.columns:
+            tweet_rows = []
+            for _, row in df.iterrows():
+                grp = row[group_col]
+                for t in row["embedded_tweets"]:
+                    if not isinstance(t, dict):
+                        continue
+                    tweet_rows.append({
+                        "group": grp,
+                        "tweetId": t.get("tweetId"),
+                        "screenName": t.get("screenName"),
+                        "tweetLink": t.get("tweetLink"),
+                        "tweetText": t.get("tweetText"),
+                    })
+            if tweet_rows:
+                sheets["EMBEDDED_TWEETS"] = pd.DataFrame(tweet_rows).sort_values(["group", "screenName"]).reset_index(drop=True)
+
+        # === META (record filter + language + html column + flags) ===
         fi = results.get("filter_info", {})
         sheets["META"] = pd.DataFrame([{
             "language": lang,
@@ -511,6 +667,12 @@ def upload_and_process():
             "filter_regex": fi.get("regex", False),
             "filtered_rows_kept": fi.get("kept", None),
             "filtered_rows_total": fi.get("total", None),
+            "html_column": (request.form.get("html_column") or "").strip(),
+            "enable_tokens": _truthy(request.form.get("enable_tokens", "true")),
+            "enable_entities": _truthy(request.form.get("enable_entities", "true")),
+            "enable_sentiment": _truthy(request.form.get("enable_sentiment", "true")),
+            # NEW: record social profile flag
+            "enable_social_profiles": _truthy(request.form.get("enable_social_profiles", "true")),
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }])
 
