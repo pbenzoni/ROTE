@@ -24,6 +24,16 @@
     <label class="form-label">Text Column to Analyze</label>
     <input name="text_column" class="form-control" value="{{ request.form.text_column or '' }}">
   </div>
+
+  <!-- NEW: Optional HTML column for XPath-based parsing -->
+  <div class="mb-3">
+    <label class="form-label">HTML Column (optional)</label>
+    <input name="html_column" class="form-control" value="{{ request.form.html_column or '' }}" placeholder="e.g., article_html">
+    <div class="form-text">
+      If provided, embedded links and tweets will be extracted using XPath. Requires lxml.
+    </div>
+  </div>
+
   <div class="mb-3">
   <label class="form-label">Filter (optional)</label>
   <textarea name="filter_query" class="form-control" rows="2" placeholder="e.g., ukraine, nato">{{ request.form.filter_query or '' }}</textarea>
@@ -50,6 +60,44 @@
   <div class="mb-3">
     <label class="form-label">Group-By Column (optional)</label>
     <input name="group_column" class="form-control" value="{{ request.form.group_column or '' }}">
+  </div>
+
+  <!-- NEW: NLP feature toggles -->
+  <div class="mb-3">
+    <label class="form-label">Analysis Options</label>
+    <div class="row">
+      {% set et = request.form.get('enable_tokens', 'on') %}
+      {% set ee = request.form.get('enable_entities', 'on') %}
+      {% set es = request.form.get('enable_sentiment', 'on') %}
+      {% set esp = request.form.get('enable_social_profiles', 'on') %}
+      <div class="col-md-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="enable_tokens" name="enable_tokens" {% if et %}checked{% endif %}>
+          <label class="form-check-label" for="enable_tokens">Enable tokens & term frequencies</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="enable_entities" name="enable_entities" {% if ee %}checked{% endif %}>
+          <label class="form-check-label" for="enable_entities">Enable entities (spaCy)</label>
+        </div>
+        <div class="form-text">If disabled, entity extraction is skipped and spaCy is not loaded.</div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="enable_sentiment" name="enable_sentiment" {% if es %}checked{% endif %}>
+          <label class="form-check-label" for="enable_sentiment">Enable sentiment</label>
+        </div>
+      </div>
+      <!-- NEW: Social media profiles toggle -->
+      <div class="col-md-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="enable_social_profiles" name="enable_social_profiles" {% if esp %}checked{% endif %}>
+          <label class="form-check-label" for="enable_social_profiles">Extract social media profiles</label>
+        </div>
+        <div class="form-text">Parses URLs in text to capture Platform:Handle pairs.</div>
+      </div>
+    </div>
   </div>
 
   <button class="btn btn-primary" type="submit">Display Analysis in Browser</button>
@@ -132,6 +180,66 @@
                 {% endfor %}
               </ul>
             </div>
+
+            <!-- NEW: Embedded links (XPath) -->
+            {% if 'embedded_links_xpath' in results.meta[group] %}
+            <div class="col-md-2">
+              <strong>Embedded Links (XPath)</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group]['embedded_links_xpath'].items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+
+            <!-- NEW: Tweet IDs -->
+            {% if 'tweet_ids' in results.meta[group] %}
+            <div class="col-md-2">
+              <strong>Tweet IDs</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group]['tweet_ids'].items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+
+            <!-- NEW: Tweet Screen Names -->
+            {% if 'tweet_screen_names' in results.meta[group] %}
+            <div class="col-md-2">
+              <strong>Tweet Screen Names</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group]['tweet_screen_names'].items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+
+            <!-- NEW: Social Profiles (Platform:Handle pairs) -->
+            {% if 'social_profile_pairs' in results.meta[group] %}
+            <div class="col-md-2">
+              <strong>Social Profiles</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group]['social_profile_pairs'].items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+
+            <!-- NEW: Social Platforms (Platform counts) -->
+            {% if 'social_platforms' in results.meta[group] %}
+            <div class="col-md-2">
+              <strong>Social Platforms</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group]['social_platforms'].items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
           </div>
         </div>
       {% endif %}
@@ -195,4 +303,4 @@
     </tbody>
   </table>
 {% endif %}
-{% endblock %}
+{% endblock %

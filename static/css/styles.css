@@ -70,6 +70,15 @@ body { font-family: "Inter", sans-serif; }
 .bg-tool-gold {
   background: linear-gradient(135deg, #7e6812 0%, #d4b70f 100%);
 }
+.bg-tool-purple {
+  background: linear-gradient(135deg, #4a0669 0%, #06b6d4 100%);
+}
+.bg-tool-green {
+  background: linear-gradient(135deg, #0a2e17 0%, #4f8d65 100%);
+}
+.bg-tool-gray {
+  background: linear-gradient(135deg, #374151 0%, #9ca3af 100%);
+}
 
 /* Accessibility: focus ring for keyboard users on stretched links */
 a.stretched-link:focus-visible {

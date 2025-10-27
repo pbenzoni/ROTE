@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Wikidata Social Profile Fetcher</h2>
+
+<form method="post" enctype="multipart/form-data">
+  <!-- Input mode -->
+  <div class="mb-3">
+    <label class="form-label">Input Source</label>
+    {% set mode = (request.form.input_mode or 'CSV') %}
+    <select name="input_mode" class="form-select">
+      <option value="CSV" {% if mode == 'CSV' %}selected{% endif %}>Upload CSV file</option>
+      <option value="URL" {% if mode == 'URL' %}selected{% endif %}>Fetch CSV from URL</option>
+    </select>
+    <div class="form-text">Choose whether to upload a local CSV or fetch one by URL.</div>
+  </div>
+
+  <!-- CSV URL -->
+  <div class="mb-3">
+    <label class="form-label">CSV URL (when using URL mode)</label>
+    <input type="url" name="csv_url" class="form-control" value="{{ request.form.csv_url or '' }}" placeholder="https://example.com/data.csv">
+  </div>
+
+  <!-- CSV file -->
+  <div class="mb-3">
+    <label class="form-label">CSV File (when using CSV mode)</label>
+    <input type="file" name="csv_file" class="form-control" accept=".csv">
+  </div>
+
+  <!-- Output -->
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <label class="form-label">Output file name</label>
+      <input type="text" name="output_file" class="form-control" value="{{ request.form.output_file or 'updated_domains_with_social_media.csv' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">User-Agent (recommended)</label>
+      <input type="text" name="user_agent" class="form-control" value="{{ request.form.user_agent or 'ResearchToolsWikidataFetcher/1.0 (contact: you@example.com)' }}">
+      <div class="form-text">Used for SPARQL requests to Wikidata Query Service.</div>
+    </div>
+  </div>
+
+  <!-- Column mapping -->
+  <div class="mb-2">
+    <label class="form-label">CSV Column Mapping</label>
+    <div class="form-text">
+      Provide your CSV’s column names for each platform. Leave blank to ignore a platform.
+    </div>
+  </div>
+  <div class="row g-3">
+    {% set cm = request.form.get %}
+    <div class="col-md-4">
+      <label class="form-label">Twitter username (P2002)</label>
+      <input name="column_map[P2002]" class="form-control" value="{{ cm('column_map[P2002]') or 'Twitter ID' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Facebook ID (P2013)</label>
+      <input name="column_map[P2013]" class="form-control" value="{{ cm('column_map[P2013]') or 'Facebook ID' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Instagram username (P2003)</label>
+      <input name="column_map[P2003]" class="form-control" value="{{ cm('column_map[P2003]') or 'Instagram username' }}">
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">YouTube channel ID (P2397)</label>
+      <input name="column_map[P2397]" class="form-control" value="{{ cm('column_map[P2397]') or 'YouTube channel ID' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">TikTok username (P7085)</label>
+      <input name="column_map[P7085]" class="form-control" value="{{ cm('column_map[P7085]') or 'TikTok username' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Telegram username (P3789)</label>
+      <input name="column_map[P3789]" class="form-control" value="{{ cm('column_map[P3789]') or 'Telegram ID' }}">
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">Threads username (P11892)</label>
+      <input name="column_map[P11892]" class="form-control" value="{{ cm('column_map[P11892]') or 'Threads username' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Rumble channel (P11962)</label>
+      <input name="column_map[P11962]" class="form-control" value="{{ cm('column_map[P11962]') or 'Rumble channel' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">VK ID (P3185)</label>
+      <input name="column_map[P3185]" class="form-control" value="{{ cm('column_map[P3185]') or 'VK ID' }}">
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">Gab username (P8919)</label>
+      <input name="column_map[P8919]" class="form-control" value="{{ cm('column_map[P8919]') or 'Gab username' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Odnoklassniki user numeric ID (P9269)</label>
+      <input name="column_map[P9269]" class="form-control" value="{{ cm('column_map[P9269]') or 'Odnoklassniki user numeric ID' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Parler username (P8904)</label>
+      <input name="column_map[P8904]" class="form-control" value="{{ cm('column_map[P8904]') or 'Parler username' }}">
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">Truth Social username (P10858)</label>
+      <input name="column_map[P10858]" class="form-control" value="{{ cm('column_map[P10858]') or 'Truth Social username' }}">
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <button class="btn btn-primary" type="submit">Run Fetcher</button>
+    <button class="btn btn-secondary" type="submit" name="format" value="preview">Preview Mapping</button>
+  </div>
+</form>
+
+{% if results %}
+  <hr/>
+  <h5>Run Summary</h5>
+  <pre>{{ results | tojson(indent=2) }}</pre>
+{% endif %}
+{% endblock %}

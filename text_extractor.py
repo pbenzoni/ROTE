@@ -37,6 +37,42 @@ text_bp = Blueprint('text_extractor', __name__, template_folder='templates')
 #     query = f"SELECT {top} {column} FROM {table} WHERE {where} {order};"
 #     return pd.read_sql_query(query, engine)
 
+##### XPATTERN EXTRACTION #####
+def extract_tweet_details(article_clean_top_node):
+    # Find all embedded tweets using the appropriate class name
+    embedded_tweets = article_clean_top_node.xpath(".//blockquote[contains(@class, 'twitter-tweet')]")
+
+    tweets_data = []
+
+    for tweet in embedded_tweets:
+        tweet_data = {}
+
+        # The tweet URL is typically contained within the last <a> tag in the blockquote.
+        tweet_link = tweet.xpath(".//a/@href")[-1] if tweet.xpath(".//a/@href") else None
+        if tweet_link:
+            tweet_data['tweetLink'] = tweet_link
+            
+            # Extract tweet ID from the tweet URL
+            tweet_data['tweetId'] = tweet_link.split('/')[-1]
+            
+            # Extract the screen name from the tweet URL
+            parts = tweet_link.split('/')
+            tweet_data['screenName'] = parts[-3] if len(parts) > 3 else None
+
+        # The full text of the tweet is contained in the <p> tag within the blockquote
+        tweet_text_list = tweet.xpath(".//p//text()")
+        tweet_data['tweetText'] = ''.join(tweet_text_list).strip() if tweet_text_list else None
+
+        tweets_data.append(tweet_data)
+
+    return tweets_data
+
+def extract_embedded_links(article_clean_top_node):
+    # Find all URLs in the HTML content
+    urls = article_clean_top_node.xpath("//a/@href")
+
+    return urls
+
 ##### TELEGRAM HELPERS #####
 def _flatten_telegram_text(msg) -> Tuple[str, list, list, list]:
     """

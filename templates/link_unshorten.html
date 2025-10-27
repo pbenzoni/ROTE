@@ -1,0 +1,171 @@
+{# File: templates/link_unshorten.html #}
+{% extends 'base.html' %}
+{% block content %}
+{% set results = results|default({}) %}
+
+<h2 class="mb-3">Link Unshortener (CSV)</h2>
+<p>
+  Upload a CSV, choose one or more URL columns, and I will follow redirects to resolve final destinations.
+  All original columns are preserved, and new columns (for example, <code>final_url</code>, <code>http_status</code>, <code>redirect_chain</code>) are appended.
+</p>
+
+{% if results.error %}
+  <div class="alert alert-danger" role="alert">
+    {{ results.error }}
+  </div>
+{% endif %}
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data" class="row g-3">
+      <input type="hidden" name="mode" value="file">
+
+      <div class="col-12">
+        <label class="form-label">Upload CSV</label>
+        <input type="file" class="form-control" name="file" accept=".csv,text/csv" required>
+        <div class="form-text">
+          The app preserves all columns. By default it looks for a <code>url</code> column, but you can specify others below.
+        </div>
+      </div>
+
+      <div class="col-md-6">
+        <label class="form-label">URL Columns (comma-separated)</label>
+        <input type="text" class="form-control" name="url_columns" placeholder="url" value="{{ request.form.url_columns or 'url' }}">
+        <div class="form-text">
+          Example: <code>url, source_url, profile</code>. Nonexistent names are ignored safely.
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">HTTP Method</label>
+        {% set method = (request.form.method or 'head')|lower %}
+        <select class="form-select" name="method">
+          <option value="head" {% if method == 'head' %}selected{% endif %}>HEAD (faster, minimal data)</option>
+          <option value="get" {% if method == 'get' %}selected{% endif %}>GET (more compatible)</option>
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Max Redirects</label>
+        <input type="number" class="form-control" name="max_redirects" min="1" max="20" value="{{ request.form.max_redirects or 10 }}">
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Timeout (seconds)</label>
+        <input type="number" class="form-control" name="timeout" min="1" max="60" step="1" value="{{ request.form.timeout or 10 }}">
+      </div>
+
+      <div class="col-md-9">
+        <label class="form-label">Output</label>
+        <div class="d-flex gap-3 pt-2">
+          {% set om = request.form.output_mode %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="table0" value="table" {% if om != 'excel' and om != 'csv' %}checked{% endif %}>
+            <label class="form-check-label" for="table0">Table (on-page)</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="excel0" value="excel" {% if om == 'excel' %}checked{% endif %}>
+            <label class="form-check-label" for="excel0">Download Excel</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="csv0" value="csv" {% if om == 'csv' %}checked{% endif %}>
+            <label class="form-check-label" for="csv0">Download CSV</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Unshorten Links</button>
+        <details class="ms-2">
+          <summary>CSV Tips</summary>
+          <ul class="mt-2 mb-0">
+            <li>Prefer UTF-8 CSV with headers.</li>
+            <li>Put shortened links in a column named “url,” or specify custom column names above.</li>
+            <li>All input columns are preserved verbatim, and output columns are appended per URL column.</li>
+          </ul>
+        </details>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if results.table_rows is defined and results.table_rows %}
+  <hr class="my-4">
+
+  <h5 class="mb-2">Results</h5>
+  <ul class="list-unstyled small text-muted">
+    <li>Rows: {{ results.total_rows }}</li>
+    <li>OK: {{ results.ok_rows }}</li>
+    <li>Errors: {{ results.error_rows }}</li>
+  </ul>
+
+  <div class="table-responsive">
+    <table id="resultsTable" class="table table-striped table-hover align-middle">
+      <thead>
+        <tr>
+          {% set cols = results.table_rows[0].keys() %}
+          {% for col in cols %}
+            <th class="sortable" data-col="{{ col|e }}">{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in results.table_rows %}
+          <tr>
+            {% for col in cols %}
+              {% set val = row[col] %}
+              {% if val is string and val.startswith('http') %}
+                <td style="max-width: 480px; word-break: break-all;">
+                  <a href="{{ val }}" target="_blank" rel="noopener">{{ val }}</a>
+                </td>
+              {% else %}
+                <td>{{ val if val is not none else '' }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="small text-muted">Tip: Click a column header to sort. Use CSV/Excel downloads for large datasets.</p>
+{% endif %}
+
+{# Minimal client-side sorting #}
+<script>
+(function () {
+  const table = document.getElementById('resultsTable');
+  if (!table) return;
+
+  const getCellVal = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
+
+  const comparer = (idx, asc) => (a, b) => {
+    const v1 = (asc ? getCellVal(a, idx) : getCellVal(b, idx)).trim();
+    const v2 = (asc ? getCellVal(b, idx) : getCellVal(a, idx)).trim();
+
+    const n1 = parseFloat(v1.replace(/,/g, ''));
+    const n2 = parseFloat(v2.replace(/,/g, ''));
+    if (!isNaN(n1) && !isNaN(n2)) return n1 - n2;
+
+    const d1 = Date.parse(v1);
+    const d2 = Date.parse(v2);
+    if (!isNaN(d1) && !isNaN(d2)) return d1 - d2;
+
+    return v1.localeCompare(v2);
+  };
+
+  table.querySelectorAll('th.sortable').forEach((th, idx) => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', function () {
+      const tbody = table.tBodies[0];
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const asc = !this.classList.contains('asc');
+      table.querySelectorAll('th.sortable').forEach(h => h.classList.remove('asc','desc'));
+      this.classList.add(asc ? 'asc' : 'desc');
+      rows.sort(comparer(idx, asc)).forEach(tr => tbody.appendChild(tr));
+    });
+  });
+})();
+</script>
+
+{% endblock %}
