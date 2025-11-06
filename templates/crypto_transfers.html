@@ -1,0 +1,234 @@
+{# File: templates/arkham_transfers.html #}
+{% extends 'base.html' %}
+{% block content %}
+{% set results = results|default({}) %}
+
+<h2 class="mb-3">Arkham Transfers Extractor</h2>
+<p>
+  Upload or paste a list of wallets, choose flow and limits, and fetch transfers from the Arkham Intelligence API. 
+  All source columns are preserved in the CSV; you can also export a Gephi-friendly GEXF network.
+</p>
+
+{% if results.error %}
+  <div class="alert alert-danger" role="alert">{{ results.error }}</div>
+{% endif %}
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if (request.form.mode or 'file') == 'paste' %}active{% endif %}" data-bs-toggle="tab" href="#paste">Paste</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if (request.form.mode or 'file') == 'file' %}active{% endif %}" data-bs-toggle="tab" href="#file">Upload File</a>
+  </li>
+</ul>
+
+<div class="tab-content">
+  <!-- PASTE MODE -->
+  <div class="tab-pane fade {% if (request.form.mode or 'file') == 'paste' %}show active{% endif %}" id="paste">
+    <form method="post" class="row g-3">
+      <input type="hidden" name="mode" value="paste">
+
+      <div class="col-12">
+        <label class="form-label">Paste CSV Rows</label>
+        <textarea class="form-control" name="pasted" rows="8" placeholder="Examples:\nAddress\n0xabc...\n0xdef...\n\n— or a table —\nAddress, Note\n0xabc..., OFAC tag\n0xdef..., Treasury list">{{ request.form.pasted or '' }}</textarea>
+        <div class="form-text">First column will be used unless you specify an Address Column below.</div>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Arkham API Key</label>
+        <input type="password" class="form-control" name="api_key" placeholder="ARKHAM_API_KEY" value="{{ request.form.api_key or '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">API Base</label>
+        <input type="text" class="form-control" name="api_base" placeholder="https://api.arkhamintelligence.com" value="{{ request.form.api_base or 'https://api.arkhamintelligence.com' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Flow</label>
+        {% set flow = (request.form.flow or 'all')|lower %}
+        <select class="form-select" name="flow">
+          <option value="all" {% if flow == 'all' %}selected{% endif %}>All</option>
+          <option value="in" {% if flow == 'in' %}selected{% endif %}>In</option>
+          <option value="out" {% if flow == 'out' %}selected{% endif %}>Out</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Limit (per page)</label>
+        <input type="number" class="form-control" name="limit" min="1" max="1000" value="{{ request.form.limit or 1000 }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Max Pages</label>
+        <input type="number" class="form-control" name="max_pages" min="1" max="20" value="{{ request.form.max_pages or 3 }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">Address Column</label>
+        <input type="text" class="form-control" name="address_column" placeholder="Address" value="{{ request.form.address_column or 'Address' }}">
+        <div class="form-text">Case-insensitive match; falls back to the first column when missing.</div>
+      </div>
+
+      <div class="col-md-8">
+        <label class="form-label">Output</label>
+        <div class="d-flex gap-3 pt-2">
+          {% set om = request.form.output_mode %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="csv1" value="csv" {% if om == 'csv' or not om %}checked{% endif %}>
+            <label class="form-check-label" for="csv1">Download CSV</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="gexf1" value="gexf" {% if om == 'gexf' %}checked{% endif %}>
+            <label class="form-check-label" for="gexf1">Download Gephi GEXF</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="table1" value="table" {% if om == 'table' %}checked{% endif %}>
+            <label class="form-check-label" for="table1">Table Preview</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 mt-1">
+        <button type="submit" class="btn btn-primary">Fetch Transfers</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- FILE MODE -->
+  <div class="tab-pane fade {% if (request.form.mode or 'file') == 'file' %}show active{% endif %}" id="file">
+    <form method="post" enctype="multipart/form-data" class="row g-3">
+      <input type="hidden" name="mode" value="file">
+
+      <div class="col-12">
+        <label class="form-label">Upload CSV/XLSX</label>
+        <input type="file" class="form-control" name="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required>
+        <div class="form-text">Include an <code>Address</code> column, or specify a different column name below.</div>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label">Arkham API Key</label>
+        <input type="password" class="form-control" name="api_key" placeholder="ARKHAM_API_KEY" value="{{ request.form.api_key or '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">API Base</label>
+        <input type="text" class="form-control" name="api_base" placeholder="https://api.arkhamintelligence.com" value="{{ request.form.api_base or 'https://api.arkhamintelligence.com' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Flow</label>
+        {% set flow2 = (request.form.flow or 'all')|lower %}
+        <select class="form-select" name="flow">
+          <option value="all" {% if flow2 == 'all' %}selected{% endif %}>All</option>
+          <option value="in" {% if flow2 == 'in' %}selected{% endif %}>In</option>
+          <option value="out" {% if flow2 == 'out' %}selected{% endif %}>Out</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Limit (per page)</label>
+        <input type="number" class="form-control" name="limit" min="1" max="1000" value="{{ request.form.limit or 1000 }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Max Pages</label>
+        <input type="number" class="form-control" name="max_pages" min="1" max="20" value="{{ request.form.max_pages or 3 }}">
+      </div>
+
+      <div class="col-md-4">
+        <label class="form-label">Address Column</label>
+        <input type="text" class="form-control" name="address_column" placeholder="Address" value="{{ request.form.address_column or 'Address' }}">
+        <div class="form-text">Case-insensitive match; falls back to the first column when missing.</div>
+      </div>
+
+      <div class="col-md-8">
+        <label class="form-label">Output</label>
+        <div class="d-flex gap-3 pt-2">
+          {% set om2 = request.form.output_mode %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="csv2" value="csv" {% if om2 == 'csv' or not om2 %}checked{% endif %}>
+            <label class="form-check-label" for="csv2">Download CSV</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="gexf2" value="gexf" {% if om2 == 'gexf' %}checked{% endif %}>
+            <label class="form-check-label" for="gexf2">Download Gephi GEXF</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="output_mode" id="table2" value="table" {% if om2 == 'table' %}checked{% endif %}>
+            <label class="form-check-label" for="table2">Table Preview</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12 mt-1">
+        <button type="submit" class="btn btn-primary">Fetch Transfers</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if results.table_rows is defined and results.table_rows %}
+  <hr class="my-4">
+
+  <h5 class="mb-2">Results</h5>
+  <ul class="list-unstyled small text-muted">
+    <li>Total Rows: {{ results.total_rows }}</li>
+    <li>OK: {{ results.ok_rows }}</li>
+    <li>Errors: {{ results.error_rows }}</li>
+    {% if results.address_column %}<li>Address Column: {{ results.address_column }}</li>{% endif %}
+  </ul>
+
+  <div class="table-responsive">
+    <table id="resultsTable" class="table table-striped table-hover align-middle">
+      <thead>
+        <tr>
+          {% set cols = results.table_rows[0].keys() %}
+          {% for col in cols %}
+            <th class="sortable" data-col="{{ col|e }}">{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in results.table_rows %}
+          <tr>
+            {% for col in cols %}
+              {% set val = row[col] %}
+              {% if val is string and val.startswith('http') %}
+                <td style="max-width: 480px; word-break: break-all;"><a href="{{ val }}" target="_blank" rel="noopener">{{ val }}</a></td>
+              {% else %}
+                <td>{{ val if val is not none else '' }}</td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="small text-muted">Tip: Click a column header to sort. Use CSV/GEXF downloads for full datasets.</p>
+{% endif %}
+
+<script>
+(function () {
+  const table = document.getElementById('resultsTable');
+  if (!table) return;
+  const getCellVal = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
+  const comparer = (idx, asc) => (a, b) => {
+    const v1 = (asc ? getCellVal(a, idx) : getCellVal(b, idx)).trim();
+    const v2 = (asc ? getCellVal(b, idx) : getCellVal(a, idx)).trim();
+    const n1 = parseFloat(v1.replace(/,/g, ''));
+    const n2 = parseFloat(v2.replace(/,/g, ''));
+    if (!isNaN(n1) && !isNaN(n2)) return n1 - n2;
+    const d1 = Date.parse(v1);
+    const d2 = Date.parse(v2);
+    if (!isNaN(d1) && !isNaN(d2)) return d1 - d2;
+    return v1.localeCompare(v2);
+  };
+  table.querySelectorAll('th.sortable').forEach((th, idx) => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', function () {
+      const tbody = table.tBodies[0];
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const asc = !this.classList.contains('asc');
+      table.querySelectorAll('th.sortable').forEach(h => h.classList.remove('asc','desc'));
+      this.classList.add(asc ? 'asc' : 'desc');
+      rows.sort(comparer(idx, asc)).forEach(tr => tbody.appendChild(tr));
+    });
+  });
+})();
+</script>
+
+{% endblock %}

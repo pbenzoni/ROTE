@@ -70,6 +70,7 @@
       {% set ee = request.form.get('enable_entities', 'on') %}
       {% set es = request.form.get('enable_sentiment', 'on') %}
       {% set esp = request.form.get('enable_social_profiles', 'on') %}
+      {% set ekp = request.form.get('enable_key_phrases', 'on') %}
       <div class="col-md-3">
         <div class="form-check">
           <input class="form-check-input" type="checkbox" id="enable_tokens" name="enable_tokens" {% if et %}checked{% endif %}>
@@ -96,6 +97,14 @@
           <label class="form-check-label" for="enable_social_profiles">Extract social media profiles</label>
         </div>
         <div class="form-text">Parses URLs in text to capture Platform:Handle pairs.</div>
+      </div>
+      <!-- NEW: Key phrases toggle -->
+      <div class="col-md-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="enable_key_phrases" name="enable_key_phrases" {% if ekp %}checked{% endif %}>
+          <label class="form-check-label" for="enable_key_phrases">Extract key phrases (KeyBERT)</label>
+        </div>
+        <div class="form-text">Uses KeyBERT to extract meaningful phrases from text.</div>
       </div>
     </div>
   </div>
@@ -180,6 +189,18 @@
                 {% endfor %}
               </ul>
             </div>
+
+            <!-- NEW: Key phrases -->
+            {% if 'key_phrases' in results.meta[group] %}
+            <div class="col-md-2">
+              <strong>Key Phrases</strong>
+              <ul class="list-unstyled">
+                {% for term, count in results.meta[group]['key_phrases'].items() %}
+                  <li>{{ term }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
 
             <!-- NEW: Embedded links (XPath) -->
             {% if 'embedded_links_xpath' in results.meta[group] %}
@@ -303,4 +324,4 @@
     </tbody>
   </table>
 {% endif %}
-{% endblock %
+{% endblock %}

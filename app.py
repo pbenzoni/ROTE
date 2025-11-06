@@ -11,6 +11,7 @@ from wp_scraper import wp_scraper_bp
 from wikidata_fetcher import wikidata_bp
 from serp_social import serp_social_bp
 from link_unshorten import link_unshorten_bp
+from crypto_transfers import crypto_transfers_bp
 
 app = Flask(__name__)
 # Use a stable env var in prod; fall back to a strong random for dev.
@@ -24,6 +25,7 @@ app.register_blueprint(wp_scraper_bp, url_prefix="/wordpress")
 app.register_blueprint(wikidata_bp, url_prefix="/wikidata")
 app.register_blueprint(serp_social_bp, url_prefix="/serp_social")
 app.register_blueprint(link_unshorten_bp, url_prefix="/link_unshorten")
+app.register_blueprint(crypto_transfers_bp, url_prefix="/crypto_transfers")
 # TODO: add blueprint for downloading sites based on RSS feeds or sitemaps
 # TODO: Add a GDELT wrapper 
 
@@ -93,6 +95,13 @@ def index():
             "icon": "fa-solid fa-link",
             "bg": "bg-tool-gray"
         },
+        {
+            "name": "Crypto Transaction Extractor",
+            "description": "UNDER CONSTRUCTION: Extract cryptocurrency transactions from public wallet addresses.",
+            "url": "/crypto_transfers",
+            "icon": "fa-brands fa-bitcoin",
+            "bg": "bg-tool-orange"
+        }
     ]
     return render_template('index.html', tools=tools)
 
