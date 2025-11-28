@@ -59,7 +59,7 @@ from flask import Blueprint, render_template, request, send_file
 serp_social_bp = Blueprint("serp_social", __name__, template_folder="templates")
 
 SERPAPI_URL = "https://serpapi.com/search"
-REQUEST_TIMEOUT = 20  # seconds
+REQUEST_TIMEOUT = 45  # seconds
 DEFAULT_PAGE_LIMIT = 3  # 3 × 100 = up to 300 results per query
 MAX_PAGE_LIMIT = 10     # hard guardrail
 DEFAULT_THROTTLE_MS = 1000
@@ -82,7 +82,7 @@ BASE_PARAMS = {
     "gl": "us",
     "hl": "en",
     "start": "0",
-    "num": "100",
+    "num": "10",
 }
 
 # ----------------------------
@@ -135,9 +135,9 @@ def _parse_paste_to_rows(text: str) -> list[dict]:
     - Otherwise attempt to map first two columns to country/site.
     """
     text = text or ""
-    rows = _sniff_csv_and_rows(text)
-    if rows:
-        return rows
+    # rows = _sniff_csv_and_rows(text)
+    # if rows:
+    #     return rows
     # Fallback: treat each non-empty line as either `query` or `country,site`.
     out = []
     for ln in (ln.strip() for ln in text.splitlines()):
@@ -328,7 +328,7 @@ def serpapi_search(api_key: str, query: str, start: int, gparams: dict) -> tuple
         **gparams,
         "q": query,
         "start": str(start),
-        "num": "100",
+        "num": "10",
         "api_key": api_key,
     }
     try:
@@ -377,6 +377,7 @@ def serp_social():
     if request.method == "POST":
         mode = request.form.get("mode", "preset")  # preset | paste | file
         output_mode = request.form.get("output_mode", "table")  # table | csv | excel
+        
 
         # SerpAPI key resolution
         api_key = (request.form.get("api_key") or os.environ.get("SERPAPI_KEY") or "").strip()
@@ -439,7 +440,7 @@ def serp_social():
 
             any_results = False
             for p in range(page_limit):
-                start = p * 100
+                start = p * 10
                 data, err = serpapi_search(api_key, query, start, gparams)
                 fetched_at = _now_iso()
                 serpapi_link = f"{SERPAPI_URL}?"  # base for debugging (full link is long; SerpAPI returns link in metadata)
