@@ -10,3 +10,4 @@ wikidata
 SQLAlchemy==2.0.28
 # vaderSentiment==3.3.2
 # vaderSentiment==3.3.2
+networkx==3.5
