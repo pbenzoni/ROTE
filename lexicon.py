@@ -25,6 +25,39 @@ try:
 except Exception:
     lxml_html = None
 
+# NEW: optional KeyBERT import for key phrase extraction
+try:
+    from keybert import KeyBERT
+    # Try to use sentence-transformers for better embeddings
+    try:
+        from sentence_transformers import SentenceTransformer
+        embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        kw_model = KeyBERT(model=embedding_model)
+    except Exception:
+        # Fallback to default KeyBERT model
+        kw_model = KeyBERT()
+    KEYBERT_AVAILABLE = True
+except Exception:
+    kw_model = None
+    KEYBERT_AVAILABLE = False
+
+def extract_key_phrases(doc, top_n=5):
+    """Extract key phrases using KeyBERT. Returns list of (phrase, score) tuples."""
+    if not KEYBERT_AVAILABLE or not kw_model or not doc or pd.isna(doc):
+        return []
+    try:
+        # KeyBERT returns [(keyword, score), ...]
+        keywords = kw_model.extract_keywords(doc,
+                                             keyphrase_ngram_range=(1,3),
+                                             top_n=top_n)
+        return keywords
+    except Exception:
+        return []
+    
+
+
+
+
 # NEW: truthy parser for request flags
 def _truthy(v) -> bool:
     if v is None:
@@ -148,6 +181,10 @@ def clean_text(text: str) -> str:
     text = re.sub(r"https?://\S+", "", text)
     text = re.sub(r"@\w+", "", text)
     text = re.sub(r"#", "", text)
+    # Remove non-alphanumeric characters (preserve Spanish letters, digits, and basic punctuation)
+    text = re.sub(r'[^a-zA-ZÀ-ÿ0-9\s.!?,;:\-\(\)]', ' ', text)
+    # Remove extra spaces
+    text = re.sub(r'\s+', ' ', text).strip()
     return text.strip()
 
 def extract_meta(text: str) -> Tuple[List[str], List[str], List[str], List[str]]:
@@ -406,8 +443,13 @@ def upload_and_process():
         enable_tokens = _truthy(request.form.get("enable_tokens", "true"))
         enable_entities = _truthy(request.form.get("enable_entities", "true"))
         enable_sentiment = _truthy(request.form.get("enable_sentiment", "true"))
-        # NEW: toggle for social profile extraction
-        enable_social_profiles = _truthy(request.form.get("enable_social_profiles", "true"))
+        # NEW: toggle for key phrase extraction
+        enable_key_phrases = _truthy(request.form.get("enable_key_phrases", "true"))
+
+        # Check KeyBERT availability
+        if enable_key_phrases and not KEYBERT_AVAILABLE:
+            flash("KeyBERT is not available. Install 'keybert' and 'sentence-transformers' to enable key phrase extraction.", "warning")
+            enable_key_phrases = False
 
         # NEW: optional HTML text column name (for XPath parsing)
         html_col = (request.form.get("html_column") or "").strip() or None
@@ -467,22 +509,21 @@ def upload_and_process():
         else:
             df["entities"] = [[] for _ in range(len(df))]
 
+        # NEW: Key phrases (optional)
+        if enable_key_phrases:
+            df["key_phrases_raw"] = df["clean_text"].apply(lambda t: extract_key_phrases(t, top_n=5))
+            df["key_phrases"] = df["key_phrases_raw"].apply(lambda kw_list: [phrase for phrase, score in kw_list])
+            df["key_phrase_scores"] = df["key_phrases_raw"].apply(lambda kw_list: [f"{phrase}:{score:.3f}" for phrase, score in kw_list])
+        else:
+            df["key_phrases"] = [[] for _ in range(len(df))]
+            df["key_phrase_scores"] = [[] for _ in range(len(df))]
+
         # Links, mentions, hashtags, domains
         meta = df[text_col].apply(extract_meta)
         df["mentions"] = meta.apply(lambda x: x[0])
         df["hashtags"] = meta.apply(lambda x: x[1])
         df["links"] = meta.apply(lambda x: x[2])
         df["domains"] = meta.apply(lambda x: x[3])
-
-        # NEW: Social media profiles (from original text with URLs)
-        if enable_social_profiles:
-            df["social_profiles"] = df[text_col].apply(extract_social_media_profiles)
-            df["social_profile_pairs"] = df["social_profiles"].apply(
-                lambda d: [f"{platform}:{handle}" for platform, handles in (d or {}).items() for handle in handles]
-            )
-            df["social_platforms"] = df["social_profiles"].apply(
-                lambda d: [platform for platform, handles in (d or {}).items() for _ in handles]
-            )
 
         # NEW: HTML parsing with XPath (embedded links + tweets)
         if html_col:
@@ -554,6 +595,7 @@ def upload_and_process():
                 "links": cum_counts(subset["links"]).to_dict(),
                 "domains": cum_counts(subset["domains"]).to_dict(),
                 "entities": cum_counts(subset["entities"]).to_dict(),
+                "key_phrases": cum_counts(subset["key_phrases"]).to_dict(),
             }
             # NEW: add HTML-derived meta if present
             if "embedded_links_xpath" in df.columns:
@@ -562,11 +604,6 @@ def upload_and_process():
                 meta_summary[g]["tweet_ids"] = cum_counts(subset["tweet_ids"]).to_dict()
             if "tweet_screen_names" in df.columns:
                 meta_summary[g]["tweet_screen_names"] = cum_counts(subset["tweet_screen_names"]).to_dict()
-            # NEW: add social profiles if present
-            if "social_profile_pairs" in df.columns:
-                meta_summary[g]["social_profile_pairs"] = cum_counts(subset["social_profile_pairs"]).to_dict()
-            if "social_platforms" in df.columns:
-                meta_summary[g]["social_platforms"] = cum_counts(subset["social_platforms"]).to_dict()
         results["meta"] = meta_summary
 
     # Excel export (unified group handling + filter META)
@@ -605,7 +642,7 @@ def upload_and_process():
             sheets["GROUP_TOTALS"] = pd.DataFrame(totals_rows).sort_values("group").reset_index(drop=True)
 
         # === Meta counts (mentions, hashtags, links, domains, entities, + HTML) ===
-        meta_keys = ["mentions", "hashtags", "links", "domains", "entities"]
+        meta_keys = ["mentions", "hashtags", "links", "domains", "entities", "key_phrases"]
         # Add optional HTML-derived keys if present
         any_meta = results.get("meta") or {}
         if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["embedded_links_xpath"]):
@@ -614,11 +651,7 @@ def upload_and_process():
             meta_keys.append("tweet_ids")
         if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["tweet_screen_names"]):
             meta_keys.append("tweet_screen_names")
-        # NEW: add social profile meta keys if present
-        if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["social_profile_pairs"]):
-            meta_keys.append("social_profile_pairs")
-        if any(k in (any_meta.get(g, {}) or {}) for g in any_meta for k in ["social_platforms"]):
-            meta_keys.append("social_platforms")
+
 
         for meta_key in meta_keys:
             meta_rows = []
@@ -671,8 +704,9 @@ def upload_and_process():
             "enable_tokens": _truthy(request.form.get("enable_tokens", "true")),
             "enable_entities": _truthy(request.form.get("enable_entities", "true")),
             "enable_sentiment": _truthy(request.form.get("enable_sentiment", "true")),
-            # NEW: record social profile flag
-            "enable_social_profiles": _truthy(request.form.get("enable_social_profiles", "true")),
+            # NEW: record key phrase flag
+            "enable_key_phrases": _truthy(request.form.get("enable_key_phrases", "true")),
+            "keybert_available": KEYBERT_AVAILABLE,
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }])
 

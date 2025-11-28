@@ -3,7 +3,7 @@ import os
 import secrets
 from flask import Flask, render_template
 from text_extractor import text_bp
-from lexicon import lexicon_bp
+#from lexicon import lexicon_bp
 from yt_oembed import yt_oembed_bp
 from temporal_analyzer import temporal_bp
 from tiktok_ads import tiktok_ads_bp
@@ -17,7 +17,7 @@ app = Flask(__name__)
 # Use a stable env var in prod; fall back to a strong random for dev.
 app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
 app.register_blueprint(text_bp, url_prefix='/extract')
-app.register_blueprint(lexicon_bp, url_prefix='/lexicon')
+#app.register_blueprint(lexicon_bp, url_prefix='/lexicon')
 app.register_blueprint(yt_oembed_bp, url_prefix='/youtube')
 app.register_blueprint(temporal_bp, url_prefix='/temporal')
 app.register_blueprint(tiktok_ads_bp, url_prefix="/tiktok")
@@ -39,13 +39,13 @@ def index():
             "icon": "fa-regular fa-file-lines",
             "bg": "bg-tool-indigo"
         },
-        {
-            "name": "Lexicon CSV Enricher",
-            "description": "Extract links, “@” mentions, named entities, sentiment, and hashtags from CSV files.",
-            "url": "/lexicon",
-            "icon": "fa-solid fa-spell-check",
-            "bg": "bg-tool-teal"
-        },
+        # {
+        #     "name": "Lexicon CSV Enricher",
+        #     "description": "Extract links, “@” mentions, named entities, sentiment, and hashtags from CSV files.",
+        #     "url": "/lexicon",
+        #     "icon": "fa-solid fa-spell-check",
+        #     "bg": "bg-tool-teal"
+        # },
         {
             "name": "YouTube Metadata Extractor",
             "description": "Extract metadata from YouTube videos.",
